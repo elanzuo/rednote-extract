@@ -118,11 +118,15 @@ export class MediaDownloader {
 
   async downloadAsZip(
     mediaItems: MediaItem[],
-    zipFilename: string
+    zipFilename: string,
+    extendedContent?: ExtendedNoteContent | null,
+    noteContent?: NoteContent | null
   ): Promise<boolean> {
     try {
       const zip = new JSZip();
-      const total = mediaItems.length;
+      const hasExtendedContent = extendedContent != null;
+      const hasContent = hasExtendedContent || noteContent != null;
+      const total = mediaItems.length + (hasContent ? 1 : 0);
       let current = 0;
 
       this.downloadCallback?.({ current, total, status: "downloading" });
@@ -138,6 +142,54 @@ export class MediaDownloader {
           this.downloadCallback?.({ current, total, status: "downloading" });
         } catch (error) {
           console.error(`Failed to download ${media.filename}:`, error);
+        }
+      }
+
+      // Add content txt file if available
+      if (hasContent) {
+        try {
+          let content = "";
+          const noteId = extractNoteId() || "unknown";
+
+          if (hasExtendedContent && extendedContent) {
+            // Use extended content with comments
+            content = `标题: ${extendedContent.title}\n作者: ${extendedContent.author}\n\n内容:\n${extendedContent.content}\n\n`;
+
+            if (extendedContent.comments.length > 0) {
+              content += `评论 (${extendedContent.comments.length} 条):\n`;
+              content += `${"=".repeat(50)}\n\n`;
+
+              extendedContent.comments.forEach((comment, index) => {
+                content += `评论 ${index + 1}:\n`;
+                content += `作者: ${comment.author}\n`;
+                content += `内容: ${comment.content}\n`;
+                content += `点赞: ${comment.likeCount}\n`;
+                if (comment.ipLocation)
+                  content += `地区: ${comment.ipLocation}\n`;
+                content += `时间: ${comment.createTime.toLocaleString()}\n`;
+
+                if (comment.replies.length > 0) {
+                  content += `  回复 (${comment.replies.length} 条):\n`;
+                  comment.replies.forEach((reply, replyIndex) => {
+                    content += `    回复 ${replyIndex + 1}: ${reply.author} - ${reply.content}\n`;
+                  });
+                }
+                content += `\n${"-".repeat(30)}\n\n`;
+              });
+            }
+
+            content += `\n来源: ${extendedContent.url}\n提取时间: ${extendedContent.extractedAt}`;
+            zip.file(`xiaohongshu_${noteId}_complete_content.txt`, content);
+          } else if (noteContent) {
+            // Use basic content only
+            content = `标题: ${noteContent.title}\n作者: ${noteContent.author}\n\n内容:\n${noteContent.content}\n\n来源: ${noteContent.url}`;
+            zip.file(`xiaohongshu_${noteId}_content.txt`, content);
+          }
+
+          current++;
+          this.downloadCallback?.({ current, total, status: "downloading" });
+        } catch (error) {
+          console.error("Failed to add content to zip:", error);
         }
       }
 

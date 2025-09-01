@@ -109,7 +109,12 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
     const downloader = new MediaDownloader(setDownloadProgress);
     const zipFilename = `xiaohongshu_${noteId}_media.zip`;
 
-    const success = await downloader.downloadAsZip(mediaItems, zipFilename);
+    const success = await downloader.downloadAsZip(
+      mediaItems,
+      zipFilename,
+      extendedContent,
+      noteContent
+    );
     if (!success) {
       setError("Failed to download ZIP file");
     }
