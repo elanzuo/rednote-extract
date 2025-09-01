@@ -3,8 +3,10 @@ import {
   extractExtendedNoteContent,
   extractMediaFromPage,
   extractNoteContent,
+  type FeedApiResponse,
   type MediaItem,
   type NoteContent,
+  setCachedFeedData,
 } from "@/utils/downloader";
 import { detectPageType, type PageInfo } from "@/utils/pageDetector";
 
@@ -12,6 +14,31 @@ export default defineContentScript({
   matches: ["*://*.xiaohongshu.com/*"],
   main() {
     console.log("RedNote Extract content script loaded");
+
+    // Intercept feed API requests
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+
+      // Check if this is a feed API request
+      const url = args[0] as string;
+      if (url.includes("/api/sns/web/v1/feed") && response.ok) {
+        try {
+          // Clone the response to avoid consuming it
+          const clonedResponse = response.clone();
+          const feedData: FeedApiResponse = await clonedResponse.json();
+
+          if (feedData.success && feedData.data?.items?.length > 0) {
+            console.log("Intercepted feed API response, caching data");
+            setCachedFeedData(feedData);
+          }
+        } catch (error) {
+          console.error("Failed to parse feed API response:", error);
+        }
+      }
+
+      return response;
+    };
 
     // Listen for messages from popup
     browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {

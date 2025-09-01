@@ -35,6 +35,55 @@ export interface ExtendedNoteContent extends NoteContent {
   extractedAt: string;
 }
 
+export interface FeedNoteCard {
+  title: string;
+  desc: string;
+  note_id: string;
+  user: {
+    nickname: string;
+    user_id: string;
+    avatar: string;
+  };
+  image_list?: Array<{
+    url_default: string;
+    url_pre: string;
+    width: number;
+    height: number;
+    info_list: Array<{
+      image_scene: string;
+      url: string;
+    }>;
+  }>;
+  tag_list?: Array<{
+    id: string;
+    name: string;
+    type: string;
+  }>;
+  interact_info: {
+    liked_count: string;
+    collected_count: string;
+    comment_count: string;
+    share_count: string;
+  };
+  time: number;
+  ip_location?: string;
+}
+
+export interface FeedApiResponse {
+  code: number;
+  success: boolean;
+  msg: string;
+  data: {
+    items: Array<{
+      id: string;
+      model_type: string;
+      note_card: FeedNoteCard;
+    }>;
+    current_time: number;
+    cursor_score: string;
+  };
+}
+
 export interface DownloadProgress {
   current: number;
   total: number;
@@ -182,8 +231,8 @@ function getCurrentNoteVideoUrl(): string | null {
   return null;
 }
 
-// Extract note content from detail page
-function extractNoteContent(): NoteContent | null {
+// Extract note content from detail page (DOM-based fallback)
+function extractNoteContentFromDOM(): NoteContent | null {
   try {
     // Get title from page title or specific selectors
     let title = document.title.replace(" - 小红书", "").trim();
@@ -201,6 +250,9 @@ function extractNoteContent(): NoteContent | null {
     // Extract author name
     let author = "";
     const authorSelectors = [
+      ".username", // 优先：小红书用户名类
+      ".info .name .username", // 信息区域内的用户名
+      '[class*="info"] .username', // 任何info类中的username
       ".author-name",
       '[class*="author"] [class*="name"]',
       ".user-name",
@@ -267,7 +319,51 @@ function extractNoteContent(): NoteContent | null {
   }
 }
 
+// Extract note content with priority fallback strategy
+function extractNoteContent(): NoteContent | null {
+  // Strategy 1: Try to get data from cached feed API response
+  const feedData = getCachedFeedData();
+  if (feedData) {
+    const feedContent = parseNoteContentFromFeed(feedData);
+    if (feedContent) {
+      console.log("Successfully extracted note content from feed API");
+      return feedContent;
+    }
+  }
+
+  // Strategy 2: Fallback to DOM extraction
+  console.log("Falling back to DOM extraction for note content");
+  return extractNoteContentFromDOM();
+}
+
 export async function extractMediaFromPage(): Promise<MediaItem[]> {
+  // Strategy 1: Try to get media from cached feed API response
+  const feedData = getCachedFeedData();
+  if (feedData) {
+    const feedMedia = parseMediaFromFeed(feedData);
+    if (feedMedia.length > 0) {
+      console.log("Successfully extracted media from feed API");
+
+      // Still try to get video from DOM as feed might not include video data
+      const videoUrl = getCurrentNoteVideoUrl();
+      if (videoUrl) {
+        feedMedia.push({
+          url: videoUrl,
+          type: "video",
+          filename: `video_1.mp4`,
+        });
+      }
+
+      return feedMedia;
+    }
+  }
+
+  // Strategy 2: Fallback to DOM extraction
+  console.log("Falling back to DOM extraction for media");
+  return extractMediaFromPageDOM();
+}
+
+async function extractMediaFromPageDOM(): Promise<MediaItem[]> {
   const mediaItems: MediaItem[] = [];
   const seenUrls = new Set<string>();
 
@@ -335,6 +431,82 @@ export async function extractMediaFromPage(): Promise<MediaItem[]> {
 function extractNoteId(): string | null {
   const match = window.location.pathname.match(/\/explore\/([a-f0-9]+)/);
   return match ? match[1] : null;
+}
+
+// Global cache for feed data
+let cachedFeedData: FeedApiResponse | null = null;
+
+// Parse note content from feed API data
+function parseNoteContentFromFeed(
+  feedData: FeedApiResponse
+): NoteContent | null {
+  try {
+    const currentNoteId = extractNoteId();
+    if (!currentNoteId) return null;
+
+    const noteItem = feedData.data.items.find(
+      (item) => item.note_card.note_id === currentNoteId
+    );
+
+    if (!noteItem || noteItem.model_type !== "note") return null;
+
+    const noteCard = noteItem.note_card;
+    return {
+      title: noteCard.title || "无标题",
+      author: noteCard.user.nickname || "未知作者",
+      content: noteCard.desc || "无内容",
+      url: window.location.href,
+    };
+  } catch (error) {
+    console.error("Failed to parse note content from feed:", error);
+    return null;
+  }
+}
+
+// Parse media items from feed API data
+function parseMediaFromFeed(feedData: FeedApiResponse): MediaItem[] {
+  try {
+    const currentNoteId = extractNoteId();
+    if (!currentNoteId) return [];
+
+    const noteItem = feedData.data.items.find(
+      (item) => item.note_card.note_id === currentNoteId
+    );
+
+    if (!noteItem || !noteItem.note_card.image_list) return [];
+
+    return noteItem.note_card.image_list.map((img, index) => {
+      const highQualityUrl =
+        img.info_list.find((info) => info.image_scene === "WB_DFT")?.url ||
+        img.url_default;
+
+      let extension = "webp";
+      if (highQualityUrl.includes(".jpg") || highQualityUrl.includes(".jpeg")) {
+        extension = "jpg";
+      } else if (highQualityUrl.includes(".png")) {
+        extension = "png";
+      }
+
+      return {
+        url: highQualityUrl,
+        type: "image" as const,
+        filename: `image_${index + 1}.${extension}`,
+      };
+    });
+  } catch (error) {
+    console.error("Failed to parse media from feed:", error);
+    return [];
+  }
+}
+
+// Set cached feed data (called from network listener)
+function setCachedFeedData(data: FeedApiResponse): void {
+  cachedFeedData = data;
+}
+
+// Get cached feed data
+function getCachedFeedData(): FeedApiResponse | null {
+  return cachedFeedData;
 }
 
 // API response interface for comments
@@ -508,4 +680,4 @@ async function extractExtendedNoteContent(): Promise<ExtendedNoteContent | null>
   }
 }
 
-export { extractNoteContent, extractExtendedNoteContent };
+export { extractNoteContent, extractExtendedNoteContent, setCachedFeedData };

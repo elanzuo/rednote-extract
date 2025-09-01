@@ -139,7 +139,7 @@ const App: React.FC = () => {
         <div className="logo">
           <img src="/icon.svg" alt="Rednote Extract" width="20" height="20" />
         </div>
-        <div className="title">小红书内容提取器</div>
+        <div className="title">小红书提取器</div>
       </div>
 
       <div className="popup-content">{renderContent()}</div>

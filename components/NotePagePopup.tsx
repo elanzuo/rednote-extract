@@ -1,4 +1,4 @@
-import { Check, Copy, Hash, Image, MessageCircle, Video } from "lucide-react";
+import { Check, Copy, Image, MessageCircle, Video } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -142,7 +142,7 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
   const downloadExtendedContent = () => {
     if (!extendedContent) return;
 
-    let content = `标题: ${extendedContent.title}\n作者: ${extendedContent.author}\n字数: ${extendedContent.wordCount} 字\n字符数: ${extendedContent.charCount} 字符\n\n内容:\n${extendedContent.content}\n\n`;
+    let content = `标题: ${extendedContent.title}\n作者: ${extendedContent.author}\n\n内容:\n${extendedContent.content}\n\n`;
 
     if (extendedContent.comments.length > 0) {
       content += `评论 (${extendedContent.comments.length} 条):\n`;
@@ -217,10 +217,19 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
   return (
     <div className="note-popup">
       <div className="header">
-        <h3>笔记内容</h3>
+        <h3 title={noteContent?.title}>
+          {noteContent?.title && noteContent.title !== "无标题"
+            ? noteContent.title.length > 20
+              ? `${noteContent.title.slice(0, 20)}...`
+              : noteContent.title
+            : "笔记内容"}
+        </h3>
         <div className="media-count">
           {imageCount > 0 && <span>图片: {imageCount}</span>}
           {videoCount > 0 && <span>视频: {videoCount}</span>}
+          {noteContent?.content && (
+            <span>字数: {noteContent.content.length}</span>
+          )}
         </div>
       </div>
 
@@ -256,7 +265,7 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
               className="extract-extended-btn"
               disabled={loadingExtended}
             >
-              {loadingExtended ? "提取扩展信息..." : "提取字数和评论"}
+              {loadingExtended ? "提取评论..." : "提取评论"}
             </button>
           </div>
         </div>
@@ -266,14 +275,6 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
         <div className="extended-content">
           <h4>扩展信息</h4>
           <div className="extended-stats">
-            <div className="stat-item">
-              <Hash size={16} />
-              <span>字数: {extendedContent.wordCount}</span>
-            </div>
-            <div className="stat-item">
-              <Hash size={16} />
-              <span>字符: {extendedContent.charCount}</span>
-            </div>
             <div className="stat-item">
               <MessageCircle size={16} />
               <span>评论: {extendedContent.comments.length}</span>
