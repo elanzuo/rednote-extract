@@ -119,7 +119,8 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
     if (!noteContent?.content) return;
 
     try {
-      await navigator.clipboard.writeText(noteContent.content);
+      const cleanContent = noteContent.content.replace(/#\S+/g, '').trim();
+      await navigator.clipboard.writeText(cleanContent);
       setCopySuccess("content");
       setTimeout(() => setCopySuccess(null), 2000);
     } catch (_err) {
@@ -244,7 +245,7 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
               type="button"
               onClick={copyTextContent}
               className="copy-btn"
-              title="复制文本内容"
+              data-tooltip="复制文本内容"
             >
               {copySuccess === "content" ? (
                 <Check size={16} color="#4caf50" />
@@ -259,7 +260,7 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
               onClick={downloadTextContent}
               className="download-text-btn"
             >
-              下载文本内容
+              下载完整文本内容
             </button>
             <button
               type="button"
