@@ -119,7 +119,7 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
     if (!noteContent?.content) return;
 
     try {
-      const cleanContent = noteContent.content.replace(/#\S+/g, '').trim();
+      const cleanContent = noteContent.content.replace(/#\S+/g, "").trim();
       await navigator.clipboard.writeText(cleanContent);
       setCopySuccess("content");
       setTimeout(() => setCopySuccess(null), 2000);
@@ -259,8 +259,9 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
               type="button"
               onClick={downloadTextContent}
               className="download-text-btn"
+              data-tooltip="包括标题、作者、内容、标签"
             >
-              下载完整文本内容
+              下载内容
             </button>
             <button
               type="button"
@@ -329,6 +330,7 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
               type="button"
               onClick={downloadExtendedContent}
               className="download-extended-btn"
+              data-tooltip="包括标题、作者、内容、标签和评论"
             >
               下载完整内容
             </button>
@@ -336,6 +338,7 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
               type="button"
               onClick={downloadExtendedAsJson}
               className="download-json-btn"
+              data-tooltip="下载所有评论，json格式"
             >
               下载JSON
             </button>
