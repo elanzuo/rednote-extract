@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RedNote Extract is a Chrome browser extension built for Xiaohongshu (RedNote) that provides media downloading and content extraction functionality. The extension is built using WXT framework with React 19, TypeScript, and Biome for code quality.
+RedNote Extract is a Chrome browser extension built for Xiaohongshu (RedNote) that provides comprehensive media downloading and content extraction functionality. The extension supports basic content extraction (title, author, text) as well as extended analysis features (word count, comment extraction). Built using WXT framework with React 19, TypeScript, and Biome for code quality.
 
 ## Development Commands
 
@@ -44,13 +44,19 @@ pnpm run format        # Run formatter only
   - `USER_PROFILE`: `/user/profile/{userId}` pattern
   - `OTHER`: Unsupported pages
 - **Media Extraction** (`utils/downloader.ts`): Core logic for extracting and downloading media/content
+  - `extractNoteContent()`: Basic content extraction (title, author, text)
+  - `extractExtendedNoteContent()`: Enhanced extraction with word count and comments
+  - `extractComments()`: Multi-strategy comment extraction (API + DOM fallback)
 
 ### Message Flow
 
 1. Popup requests page info from content script
 2. Content script detects page type and responds
 3. Popup loads appropriate component based on page type
-4. User interactions trigger content script functions via message passing
+4. User interactions trigger content script functions via message passing:
+   - `extractMedia`: Extract media files (images/videos)
+   - `extractNoteContent`: Basic text content extraction
+   - `extractExtendedNoteContent`: Enhanced extraction with comments and analytics
 
 ## Key Configuration
 
@@ -81,4 +87,5 @@ pnpm run format        # Run formatter only
 - Extension only works on Xiaohongshu domains for security
 - Uses modern React 19 features and TypeScript strict mode
 - All media extraction happens client-side through content script injection
-- No external API calls - extracts content directly from DOM
+- Comment extraction uses Xiaohongshu's official API endpoints with fallback to DOM parsing
+- Extended content extraction includes word count analysis and comment data with metadata

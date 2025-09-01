@@ -1,4 +1,6 @@
 import {
+  type ExtendedNoteContent,
+  extractExtendedNoteContent,
   extractMediaFromPage,
   extractNoteContent,
   type MediaItem,
@@ -38,6 +40,19 @@ export default defineContentScript({
           console.error("Failed to extract note content:", error);
           sendResponse({ success: false, error: error.message });
         }
+      }
+
+      if (message.action === "extractExtendedNoteContent") {
+        (async () => {
+          try {
+            const extendedContent: ExtendedNoteContent | null =
+              await extractExtendedNoteContent();
+            sendResponse({ success: true, extendedContent });
+          } catch (error) {
+            console.error("Failed to extract extended note content:", error);
+            sendResponse({ success: false, error: error.message });
+          }
+        })();
       }
 
       // Return true to indicate we'll respond asynchronously

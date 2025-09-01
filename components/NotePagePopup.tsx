@@ -1,8 +1,9 @@
-import { Check, Copy, Image, Video } from "lucide-react";
+import { Check, Copy, Hash, Image, MessageCircle, Video } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import {
   type DownloadProgress,
+  type ExtendedNoteContent,
   MediaDownloader,
   type MediaItem,
   type NoteContent,
@@ -15,7 +16,10 @@ interface NotePagePopupProps {
 export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [noteContent, setNoteContent] = useState<NoteContent | null>(null);
+  const [extendedContent, setExtendedContent] =
+    useState<ExtendedNoteContent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingExtended, setLoadingExtended] = useState(false);
   const [downloadProgress, setDownloadProgress] =
     useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +59,33 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
       setError(err instanceof Error ? err.message : "Unknown error occurred");
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const extractExtendedData = useCallback(async () => {
+    try {
+      setLoadingExtended(true);
+      setError(null);
+
+      const [tab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      if (!tab.id) throw new Error("No active tab found");
+
+      const response = await browser.tabs.sendMessage(tab.id, {
+        action: "extractExtendedNoteContent",
+      });
+
+      if (response.success && response.extendedContent) {
+        setExtendedContent(response.extendedContent);
+      } else {
+        setError(response.error || "Failed to extract extended content");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error occurred");
+    } finally {
+      setLoadingExtended(false);
     }
   }, []);
 
@@ -104,6 +135,59 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
     const a = document.createElement("a");
     a.href = url;
     a.download = `xiaohongshu_${noteId}_content.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadExtendedContent = () => {
+    if (!extendedContent) return;
+
+    let content = `标题: ${extendedContent.title}\n作者: ${extendedContent.author}\n字数: ${extendedContent.wordCount} 字\n字符数: ${extendedContent.charCount} 字符\n\n内容:\n${extendedContent.content}\n\n`;
+
+    if (extendedContent.comments.length > 0) {
+      content += `评论 (${extendedContent.comments.length} 条):\n`;
+      content += `${"=".repeat(50)}\n\n`;
+
+      extendedContent.comments.forEach((comment, index) => {
+        content += `评论 ${index + 1}:\n`;
+        content += `作者: ${comment.author}\n`;
+        content += `内容: ${comment.content}\n`;
+        content += `点赞: ${comment.likeCount}\n`;
+        if (comment.ipLocation) content += `地区: ${comment.ipLocation}\n`;
+        content += `时间: ${comment.createTime.toLocaleString()}\n`;
+
+        if (comment.replies.length > 0) {
+          content += `  回复 (${comment.replies.length} 条):\n`;
+          comment.replies.forEach((reply, replyIndex) => {
+            content += `    回复 ${replyIndex + 1}: ${reply.author} - ${reply.content}\n`;
+          });
+        }
+        content += `\n${"-".repeat(30)}\n\n`;
+      });
+    }
+
+    content += `\n来源: ${extendedContent.url}\n提取时间: ${extendedContent.extractedAt}`;
+
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `xiaohongshu_${noteId}_extended.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadExtendedAsJson = () => {
+    if (!extendedContent) return;
+
+    const jsonString = JSON.stringify(extendedContent, null, 2);
+    const blob = new Blob([jsonString], {
+      type: "application/json;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `xiaohongshu_${noteId}_extended.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -165,6 +249,83 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
               className="download-text-btn"
             >
               下载文本内容
+            </button>
+            <button
+              type="button"
+              onClick={extractExtendedData}
+              className="extract-extended-btn"
+              disabled={loadingExtended}
+            >
+              {loadingExtended ? "提取扩展信息..." : "提取字数和评论"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {extendedContent && (
+        <div className="extended-content">
+          <h4>扩展信息</h4>
+          <div className="extended-stats">
+            <div className="stat-item">
+              <Hash size={16} />
+              <span>字数: {extendedContent.wordCount}</span>
+            </div>
+            <div className="stat-item">
+              <Hash size={16} />
+              <span>字符: {extendedContent.charCount}</span>
+            </div>
+            <div className="stat-item">
+              <MessageCircle size={16} />
+              <span>评论: {extendedContent.comments.length}</span>
+            </div>
+          </div>
+
+          {extendedContent.comments.length > 0 && (
+            <div className="comments-section">
+              <h5>评论预览</h5>
+              <div className="comments-list">
+                {extendedContent.comments.slice(0, 3).map((comment, _index) => (
+                  <div key={comment.id} className="comment-item">
+                    <div className="comment-author">{comment.author}</div>
+                    <div className="comment-content">{comment.content}</div>
+                    <div className="comment-meta">
+                      {comment.likeCount > 0 && (
+                        <span>👍 {comment.likeCount}</span>
+                      )}
+                      {comment.ipLocation && (
+                        <span>📍 {comment.ipLocation}</span>
+                      )}
+                    </div>
+                    {comment.replies.length > 0 && (
+                      <div className="comment-replies">
+                        {comment.replies.length} 条回复
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {extendedContent.comments.length > 3 && (
+                  <div className="comments-more">
+                    还有 {extendedContent.comments.length - 3} 条评论...
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="extended-actions">
+            <button
+              type="button"
+              onClick={downloadExtendedContent}
+              className="download-extended-btn"
+            >
+              下载完整内容
+            </button>
+            <button
+              type="button"
+              onClick={downloadExtendedAsJson}
+              className="download-json-btn"
+            >
+              下载JSON
             </button>
           </div>
         </div>

@@ -13,6 +13,28 @@ export interface NoteContent {
   url: string;
 }
 
+export interface CommentItem {
+  id: string;
+  author: string;
+  content: string;
+  createTime: Date;
+  likeCount: number;
+  ipLocation: string;
+  replies: Array<{
+    author: string;
+    content: string;
+    createTime: Date;
+    likeCount: number;
+  }>;
+}
+
+export interface ExtendedNoteContent extends NoteContent {
+  wordCount: number;
+  charCount: number;
+  comments: CommentItem[];
+  extractedAt: string;
+}
+
 export interface DownloadProgress {
   current: number;
   total: number;
@@ -309,4 +331,181 @@ export async function extractMediaFromPage(): Promise<MediaItem[]> {
   return mediaItems;
 }
 
-export { extractNoteContent };
+// Extract note ID from URL
+function extractNoteId(): string | null {
+  const match = window.location.pathname.match(/\/explore\/([a-f0-9]+)/);
+  return match ? match[1] : null;
+}
+
+// API response interface for comments
+interface ApiCommentResponse {
+  data: {
+    comments: Array<{
+      id: string;
+      content: string;
+      create_time: number;
+      like_count: string;
+      ip_location: string;
+      user_info: {
+        user_id: string;
+        nickname: string;
+        image: string;
+      };
+      sub_comments: Array<{
+        content: string;
+        create_time: number;
+        like_count: string;
+        user_info: {
+          nickname: string;
+        };
+      }>;
+      sub_comment_count: string;
+    }>;
+  };
+}
+
+// Parse API comment data
+function parseApiComments(apiResponse: ApiCommentResponse): CommentItem[] {
+  if (!apiResponse?.data?.comments) return [];
+
+  return apiResponse.data.comments.map((comment) => ({
+    id: comment.id,
+    author: comment.user_info.nickname,
+    content: comment.content,
+    createTime: new Date(comment.create_time),
+    likeCount: parseInt(comment.like_count, 10) || 0,
+    ipLocation: comment.ip_location,
+    replies:
+      comment.sub_comments?.map((subComment) => ({
+        author: subComment.user_info.nickname,
+        content: subComment.content,
+        createTime: new Date(subComment.create_time),
+        likeCount: parseInt(subComment.like_count, 10) || 0,
+      })) || [],
+  }));
+}
+
+// Fetch comments directly from API
+async function fetchCommentsDirectly(noteId: string): Promise<CommentItem[]> {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const xsecToken = urlParams.get("xsec_token");
+
+    if (!xsecToken) {
+      console.error("No xsec_token found in URL");
+      return [];
+    }
+
+    const apiUrl = `https://edith.xiaohongshu.com/api/sns/web/v2/comment/page?note_id=${noteId}&cursor=&top_comment_id=&image_formats=jpg,webp,avif&xsec_token=${xsecToken}`;
+
+    const response = await fetch(apiUrl, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Referer: window.location.href,
+        "User-Agent": navigator.userAgent,
+      },
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
+    }
+
+    const data: ApiCommentResponse = await response.json();
+    return parseApiComments(data);
+  } catch (error) {
+    console.error("Direct API call failed:", error);
+    return [];
+  }
+}
+
+// Extract comments from DOM as fallback
+function extractCommentsFromDOM(): CommentItem[] {
+  const comments: CommentItem[] = [];
+
+  const commentSelectors = [
+    ".comment-item",
+    ".comment",
+    '[class*="comment"]:not([class*="count"])',
+  ];
+
+  commentSelectors.forEach((selector) => {
+    const elements = document.querySelectorAll(selector);
+
+    elements.forEach((element, index) => {
+      const content = element.textContent?.trim();
+      if (content && content.length > 5) {
+        const authorEl = element.querySelector(
+          '[class*="author"], [class*="user"], [class*="name"]'
+        );
+        const _timeEl = element.querySelector('[class*="time"]');
+
+        comments.push({
+          id: `dom_${index}`,
+          author: authorEl?.textContent?.trim() || "匿名用户",
+          content,
+          createTime: new Date(),
+          likeCount: 0,
+          ipLocation: "",
+          replies: [],
+        });
+      }
+    });
+  });
+
+  return comments;
+}
+
+// Extract comments with multiple strategies
+async function extractComments(): Promise<CommentItem[]> {
+  const noteId = extractNoteId();
+  if (!noteId) {
+    console.error("Could not extract note ID from URL");
+    return [];
+  }
+
+  // Strategy 1: Direct API call
+  try {
+    const apiComments = await fetchCommentsDirectly(noteId);
+    if (apiComments && apiComments.length > 0) {
+      console.log("Successfully extracted comments from API");
+      return apiComments;
+    }
+  } catch (error) {
+    console.error("API comment extraction failed:", error);
+  }
+
+  // Strategy 2: DOM extraction fallback
+  console.log("Falling back to DOM extraction");
+  return extractCommentsFromDOM();
+}
+
+// Enhanced note content extraction with word count and comments
+async function extractExtendedNoteContent(): Promise<ExtendedNoteContent | null> {
+  try {
+    // Get basic content first
+    const baseContent = extractNoteContent();
+    if (!baseContent) return null;
+
+    // Calculate word and character counts
+    const wordCount = baseContent.content.replace(/\s+/g, "").length;
+    const charCount = baseContent.content.length;
+
+    // Extract comments
+    const comments = await extractComments();
+
+    return {
+      ...baseContent,
+      wordCount,
+      charCount,
+      comments,
+      extractedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error("Failed to extract extended note content:", error);
+    return null;
+  }
+}
+
+export { extractNoteContent, extractExtendedNoteContent };
