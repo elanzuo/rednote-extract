@@ -1,3 +1,4 @@
+import { AlertCircle, Circle, FileText, User } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
@@ -101,7 +102,9 @@ const App: React.FC = () => {
       default:
         return (
           <div className="unsupported-page">
-            <div className="unsupported-icon">🚫</div>
+            <div className="unsupported-icon">
+              <AlertCircle size={32} color="#f44336" />
+            </div>
             <div className="unsupported-text">
               <h3>不支持的页面</h3>
               <p>请访问小红书的笔记详情页或个人主页来使用此插件。</p>
@@ -109,8 +112,20 @@ const App: React.FC = () => {
             <div className="supported-pages">
               <h4>支持的页面类型:</h4>
               <ul>
-                <li>📝 笔记详情页 (/explore/...)</li>
-                <li>👤 个人主页 (/user/profile/...)</li>
+                <li>
+                  <FileText
+                    size={16}
+                    style={{ verticalAlign: "middle", marginRight: "4px" }}
+                  />
+                  笔记详情页 (/explore/...)
+                </li>
+                <li>
+                  <User
+                    size={16}
+                    style={{ verticalAlign: "middle", marginRight: "4px" }}
+                  />
+                  个人主页 (/user/profile/...)
+                </li>
               </ul>
             </div>
           </div>
@@ -121,7 +136,9 @@ const App: React.FC = () => {
   return (
     <div className="popup-container">
       <div className="popup-header">
-        <div className="logo">🔴</div>
+        <div className="logo">
+          <Circle size={20} fill="#f44336" color="#f44336" />
+        </div>
         <div className="title">Rednote Extract</div>
       </div>
 

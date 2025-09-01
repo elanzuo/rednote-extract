@@ -1,3 +1,4 @@
+import { Check, Copy, Image, Video } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -150,7 +151,11 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
               className="copy-btn"
               title="复制作者名"
             >
-              {copySuccess === "author" ? "✓" : "📋"}
+              {copySuccess === "author" ? (
+                <Check size={16} color="#4caf50" />
+              ) : (
+                <Copy size={16} />
+              )}
             </button>
           </div>
           <div className="content-actions">
@@ -175,7 +180,17 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
               <div key={`${media.url}-${index}`} className="media-item">
                 <div className="media-info">
                   <span className="media-type">
-                    {media.type === "image" ? "🖼️" : "🎥"}
+                    {media.type === "image" ? (
+                      <Image
+                        size={16}
+                        style={{ verticalAlign: "middle", marginRight: "4px" }}
+                      />
+                    ) : (
+                      <Video
+                        size={16}
+                        style={{ verticalAlign: "middle", marginRight: "4px" }}
+                      />
+                    )}
                   </span>
                   <span className="media-name">{media.filename}</span>
                 </div>

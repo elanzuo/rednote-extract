@@ -1,3 +1,4 @@
+import { User } from "lucide-react";
 import type React from "react";
 
 interface ProfilePagePopupProps {
@@ -14,7 +15,9 @@ export const ProfilePagePopup: React.FC<ProfilePagePopupProps> = ({
       </div>
 
       <div className="placeholder">
-        <div className="placeholder-icon">👤</div>
+        <div className="placeholder-icon">
+          <User size={48} color="#666" />
+        </div>
         <div className="placeholder-text">
           <p>个人主页功能开发中...</p>
           <p className="user-id">用户ID: {userId}</p>
