@@ -1,4 +1,4 @@
-import { AlertCircle, Circle, FileText, User } from "lucide-react";
+import { AlertCircle, FileText, User } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
@@ -137,9 +137,9 @@ const App: React.FC = () => {
     <div className="popup-container">
       <div className="popup-header">
         <div className="logo">
-          <Circle size={20} fill="#f44336" color="#f44336" />
+          <img src="/icon.svg" alt="Rednote Extract" width="20" height="20" />
         </div>
-        <div className="title">Rednote Extract</div>
+        <div className="title">小红书提取器</div>
       </div>
 
       <div className="popup-content">{renderContent()}</div>

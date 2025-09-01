@@ -3,7 +3,7 @@ import { defineConfig } from "wxt";
 export default defineConfig({
   manifest: {
     name: "Rednote Extract",
-    description: "为小红书（Xiaohongshu）用户提供便捷的内容下载和提取功能",
+    description: "用于小红书（Xiaohongshu）内容的提取和下载",
     version: "0.0.1",
     permissions: ["activeTab", "downloads", "storage"],
     host_permissions: ["*://*.xiaohongshu.com/*"],
