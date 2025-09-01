@@ -18,6 +18,7 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
   const [noteContent, setNoteContent] = useState<NoteContent | null>(null);
   const [extendedContent, setExtendedContent] =
     useState<ExtendedNoteContent | null>(null);
+  const [showExtendedContent, setShowExtendedContent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingExtended, setLoadingExtended] = useState(false);
   const [downloadProgress, setDownloadProgress] =
@@ -79,6 +80,7 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
 
       if (response.success && response.extendedContent) {
         setExtendedContent(response.extendedContent);
+        setShowExtendedContent(true);
       } else {
         setError(response.error || "Failed to extract extended content");
       }
@@ -172,7 +174,7 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `xiaohongshu_${noteId}_extended.txt`;
+    a.download = `xiaohongshu_${noteId}_comments.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -187,7 +189,7 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `xiaohongshu_${noteId}_extended.json`;
+    a.download = `xiaohongshu_${noteId}_comments.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -261,19 +263,27 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
             </button>
             <button
               type="button"
-              onClick={extractExtendedData}
+              onClick={
+                showExtendedContent
+                  ? () => setShowExtendedContent(false)
+                  : extractExtendedData
+              }
               className="extract-extended-btn"
               disabled={loadingExtended}
             >
-              {loadingExtended ? "提取评论..." : "提取评论"}
+              {loadingExtended
+                ? "提取评论..."
+                : showExtendedContent
+                  ? "关闭评论"
+                  : "提取评论"}
             </button>
           </div>
         </div>
       )}
 
-      {extendedContent && (
+      {extendedContent && showExtendedContent && (
         <div className="extended-content">
-          <h4>扩展信息</h4>
+          <h4>评论信息</h4>
           <div className="extended-stats">
             <div className="stat-item">
               <MessageCircle size={16} />
