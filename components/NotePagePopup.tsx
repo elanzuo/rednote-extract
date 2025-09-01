@@ -113,15 +113,15 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
     }
   };
 
-  const copyAuthor = async () => {
-    if (!noteContent?.author) return;
+  const copyTextContent = async () => {
+    if (!noteContent?.content) return;
 
     try {
-      await navigator.clipboard.writeText(noteContent.author);
-      setCopySuccess("author");
+      await navigator.clipboard.writeText(noteContent.content);
+      setCopySuccess("content");
       setTimeout(() => setCopySuccess(null), 2000);
     } catch (_err) {
-      setError("Failed to copy author name");
+      setError("Failed to copy text content");
     }
   };
 
@@ -240,11 +240,11 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
             <span className="author-name">{noteContent.author}</span>
             <button
               type="button"
-              onClick={copyAuthor}
+              onClick={copyTextContent}
               className="copy-btn"
-              title="复制作者名"
+              title="复制文本内容"
             >
-              {copySuccess === "author" ? (
+              {copySuccess === "content" ? (
                 <Check size={16} color="#4caf50" />
               ) : (
                 <Copy size={16} />

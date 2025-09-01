@@ -148,7 +148,7 @@ body {
 }
 
 .copy-btn {
-  background: linear-gradient(135deg, #9b59b6 0%, #bb7bd1 100%);
+  background: linear-gradient(135deg, #3498db 0%, #5dade2 100%);
   color: white;
   border: none;
   padding: 4px 8px;
@@ -161,13 +161,13 @@ body {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  box-shadow: 0 3px 10px rgba(155, 89, 182, 0.3);
+  box-shadow: 0 3px 10px rgba(52, 152, 219, 0.3);
 }
 
 .copy-btn:hover {
-  background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%);
+  background: linear-gradient(135deg, #2980b9 0%, #3498db 100%);
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(155, 89, 182, 0.4);
+  box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
 }
 
 .content-actions {
@@ -484,7 +484,7 @@ body {
 
 /* Extended Content Styles */
 .extract-extended-btn {
-  background: var(--accent-blue);
+  background: linear-gradient(135deg, #9b59b6 0%, #bb7bd1 100%);
   color: white;
   border: none;
   padding: 6px 12px;
@@ -493,12 +493,13 @@ body {
   font-size: 12px;
   font-weight: 500;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 3px 10px rgba(155, 89, 182, 0.3);
 }
 
 .extract-extended-btn:hover:not(:disabled) {
-  background: #2980b9;
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+  background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(155, 89, 182, 0.4);
 }
 
 .extract-extended-btn:disabled {
