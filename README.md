@@ -162,6 +162,8 @@
 - **构建工具**: Vite
 - **代码质量**: Biome (Linting + Formatting)
 - **打包库**: JSZip
+- **数据获取**: Feed API拦截 + 多层降级策略
+- **网络监控**: Chrome webRequest API + Main World脚本注入
 
 ### 项目结构
 
@@ -171,13 +173,37 @@ rednote-extract/
 │   ├── NotePagePopup.tsx    # 笔记页面弹窗组件
 │   └── ProfilePagePopup.tsx # 用户主页弹窗组件
 ├── entrypoints/         # 扩展入口点
-│   ├── content.ts           # 内容脚本
+│   ├── background.ts        # 背景脚本 (网络监听)
+│   ├── content.ts           # 内容脚本 (消息通信)
 │   └── popup/              # 弹窗页面
 ├── utils/               # 工具函数
-│   ├── downloader.ts        # 下载核心逻辑
+│   ├── downloader.ts        # 下载核心逻辑 (多层提取策略)
 │   └── pageDetector.ts      # 页面检测
-├── docs/                # 技术文档
-└── public/              # 静态资源
+├── public/              # 静态资源
+│   └── injected.js         # Main World脚本 (API拦截)
+└── docs/                # 技术文档
+    └── 原理.md             # 完整技术原理说明
+```
+
+### 数据提取架构
+
+```mermaid
+graph TB
+    A[用户访问小红书页面] --> B[Content Script注入]
+    B --> C[Main World脚本注入]
+    C --> D[拦截Feed API请求]
+    D --> E[解析API响应数据]
+    E --> F[缓存到Chrome Storage]
+    F --> G[用户点击扩展]
+    G --> H[Popup请求数据]
+    H --> I{Feed API数据可用?}
+    I -->|是| J[使用高质量API数据]
+    I -->|否| K{直接API调用成功?}
+    K -->|是| L[使用API调用结果]
+    K -->|否| M[降级到DOM解析]
+    J --> N[展示内容和媒体]
+    L --> N
+    M --> N
 ```
 
 ### 关键特性
@@ -186,44 +212,18 @@ rednote-extract/
 - **TypeScript**: 全面的类型支持
 - **现代 React**: 使用最新的 React 19 特性
 - **代码质量**: 集成 Biome 确保代码质量
+- **多层数据获取**: Feed API拦截 → 直接API调用 → DOM解析三层降级策略
+- **网络拦截**: Main World脚本拦截 + Background监听双重保障
+- **智能缓存**: Chrome Storage + 内存缓存实现跨标签页数据共享
+- **高质量媒体**: 直接获取原始质量的图片和视频资源
 
 ## 支持的页面类型
 
-| 页面类型 | URL 模式 | 支持功能 |
-|---------|----------|----------|
-| 笔记详情页 | `/explore/{noteId}` | ✅ 媒体下载 ✅ 文本提取 ✅ 作者信息 ✅ 字数统计 ✅ 评论提取 |
-| 用户主页 | `/user/profile/{userId}` | 🚧 开发中 |
-| 其他页面 | - | ❌ 不支持 |
-
-## 开发指南
-
-### 代码规范
-
-项目使用 Biome 进行代码质量控制：
-
-```bash
-# 检查代码质量
-pnpm check
-
-# 自动修复问题  
-pnpm check:fix
-
-# 仅运行 linter
-pnpm lint
-
-# 仅运行格式化
-pnpm format
-```
-
-### 提交规范
-
-- feat: 新功能
-- fix: 修复bug
-- docs: 文档更新
-- style: 代码格式调整
-- refactor: 代码重构
-- test: 测试相关
-- chore: 构建/工具相关
+| 页面类型 | URL 模式 | 支持功能 | 数据来源 |
+|---------|----------|----------|----------|
+| 笔记详情页 | `/explore/{noteId}` | ✅ 媒体下载 ✅ 文本提取 ✅ 作者信息 ✅ 字数统计 ✅ 评论提取 | Feed API + 评论API + DOM |
+| 用户主页 | `/user/profile/{userId}` | 🚧 开发中 | DOM |
+| 其他页面 | - | ❌ 不支持 | - |
 
 ## 许可证
 
@@ -236,6 +236,7 @@ GNU General Public License v3.0
 - [WXT 文档](https://wxt.dev/)
 - [Chrome Extensions 文档](https://developer.chrome.com/docs/extensions/)
 - [React 文档](https://reactjs.org/)
+- [技术原理详解](./docs/原理.md) - 完整的技术实现说明
 
 ---
 
