@@ -5,8 +5,12 @@ export default defineConfig({
     name: "Rednote Extract",
     description: "用于小红书（Xiaohongshu）内容的提取和下载",
     version: "0.0.1",
-    permissions: ["activeTab", "downloads", "storage"],
-    host_permissions: ["*://*.xiaohongshu.com/*"],
+    permissions: ["activeTab", "downloads", "storage", "webRequest"],
+    host_permissions: [
+      "*://*.xiaohongshu.com/*",
+      "*://*.xhscdn.com/*",
+      "*://edith.xiaohongshu.com/*",
+    ],
     action: {
       default_popup: "popup.html",
       default_title: "Rednote Extract",
@@ -17,6 +21,12 @@ export default defineConfig({
       48: "icons/icon-48x48.png",
       128: "icons/icon-128x128.png",
     },
+    web_accessible_resources: [
+      {
+        resources: ["injected.js"],
+        matches: ["*://*.xiaohongshu.com/*"],
+      },
+    ],
   },
   modules: ["@wxt-dev/module-react"],
 });

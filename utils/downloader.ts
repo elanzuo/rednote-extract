@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { browser } from "wxt/browser";
 
 export interface MediaItem {
   url: string;
@@ -39,6 +40,7 @@ export interface FeedNoteCard {
   title: string;
   desc: string;
   note_id: string;
+  type: "normal" | "video";
   user: {
     nickname: string;
     user_id: string;
@@ -54,6 +56,28 @@ export interface FeedNoteCard {
       url: string;
     }>;
   }>;
+  video?: {
+    media: {
+      stream: {
+        h264: Array<{
+          master_url: string;
+          width: number;
+          height: number;
+          quality_type: string;
+          format: string;
+          backup_urls: string[];
+        }>;
+        h265: Array<{
+          master_url: string;
+          width: number;
+          height: number;
+          quality_type: string;
+          format: string;
+          backup_urls: string[];
+        }>;
+      };
+    };
+  };
   tag_list?: Array<{
     id: string;
     name: string;
@@ -99,8 +123,26 @@ export class MediaDownloader {
 
   async downloadSingle(media: MediaItem): Promise<boolean> {
     try {
-      const response = await fetch(media.url);
+      console.log(`Starting download for ${media.type}: ${media.filename}`);
+      console.log(`URL: ${media.url}`);
+
+      const response = await fetch(media.url, {
+        method: "GET",
+        // Add referrer to avoid potential blocking
+        headers: {
+          Referer: window.location.href,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      console.log(
+        `Successfully fetched ${media.filename}, content length: ${response.headers.get("content-length")}`
+      );
       const blob = await response.blob();
+      console.log(`Blob created with size: ${blob.size} bytes`);
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -109,9 +151,13 @@ export class MediaDownloader {
       a.click();
 
       URL.revokeObjectURL(url);
+      console.log(`Successfully downloaded ${media.filename}`);
       return true;
     } catch (error) {
-      console.error("Download failed:", error);
+      console.error(`Failed to download ${media.filename}:`, error);
+      if (error instanceof Error) {
+        console.error(`Error details: ${error.message}`);
+      }
       return false;
     }
   }
@@ -134,14 +180,27 @@ export class MediaDownloader {
       // Download all media items and add to zip
       for (const media of mediaItems) {
         try {
-          const response = await fetch(media.url);
+          console.log(`Downloading ${media.filename} for ZIP archive...`);
+          const response = await fetch(media.url, {
+            method: "GET",
+            headers: {
+              Referer: window.location.href,
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
           const blob = await response.blob();
           zip.file(media.filename, blob);
+          console.log(`Added ${media.filename} to ZIP (${blob.size} bytes)`);
 
           current++;
           this.downloadCallback?.({ current, total, status: "downloading" });
         } catch (error) {
-          console.error(`Failed to download ${media.filename}:`, error);
+          console.error(`Failed to download ${media.filename} for ZIP:`, error);
+          // Continue with other files even if one fails
         }
       }
 
@@ -258,28 +317,49 @@ function getCurrentNoteImgEls(): HTMLImageElement[] {
   return els;
 }
 
-// Get current note video (similar to RedConvert approach)
+// Get current note video (enhanced detection)
 function getCurrentNoteVideoUrl(): string | null {
-  // Direct video element
-  let videoEl = document.querySelector("video") as HTMLVideoElement;
-  if (videoEl?.src) return videoEl.src;
+  console.log("Attempting to detect video element...");
 
-  // Video with source element
-  if (videoEl) {
-    const source = videoEl.querySelector("source") as HTMLSourceElement;
-    if (source?.src) return source.src;
+  // Try multiple video selectors for Xiaohongshu
+  const videoSelectors = [
+    "video", // Direct video element
+    ".video-container video",
+    ".note-video video",
+    "[data-video] video",
+    "xg-video-container video", // XGPlayer container
+    ".xgplayer video",
+  ];
+
+  for (const selector of videoSelectors) {
+    const videoEl = document.querySelector(selector) as HTMLVideoElement;
+    if (videoEl) {
+      console.log(`Found video element with selector: ${selector}`, videoEl);
+
+      // Check currentSrc first (more reliable)
+      if (videoEl.currentSrc) {
+        console.log("Found video currentSrc:", videoEl.currentSrc);
+        return videoEl.currentSrc;
+      }
+
+      // Check src attribute
+      if (videoEl.src) {
+        console.log("Found video src:", videoEl.src);
+        return videoEl.src;
+      }
+
+      // Check source elements
+      const sources = videoEl.querySelectorAll("source");
+      for (const source of sources) {
+        if (source.src) {
+          console.log("Found source src:", source.src);
+          return source.src;
+        }
+      }
+    }
   }
 
-  // Video containers
-  videoEl = document.querySelector(
-    ".video-container video, .note-video video"
-  ) as HTMLVideoElement;
-  if (videoEl?.src) return videoEl.src;
-  if (videoEl) {
-    const source = videoEl.querySelector("source") as HTMLSourceElement;
-    if (source?.src) return source.src;
-  }
-
+  console.log("No video URL found via DOM detection");
   return null;
 }
 
@@ -389,29 +469,62 @@ function extractNoteContent(): NoteContent | null {
 }
 
 export async function extractMediaFromPage(): Promise<MediaItem[]> {
+  console.log("🔍 Starting media extraction process...");
+
   // Strategy 1: Try to get media from cached feed API response
   const feedData = getCachedFeedData();
   if (feedData) {
     const feedMedia = parseMediaFromFeed(feedData);
     if (feedMedia.length > 0) {
-      console.log("Successfully extracted media from feed API");
+      console.log("✅ Successfully extracted media from feed API", feedMedia);
+      return feedMedia;
+    } else {
+      console.log(
+        "⚠️ Feed API returned no media items, checking if note exists..."
+      );
+      // Check if we have the right note but no media
+      const currentNoteId = extractNoteId();
+      const noteItem = feedData.data.items.find(
+        (item) => item.note_card.note_id === currentNoteId
+      );
+      if (noteItem) {
+        console.log(
+          `📝 Found note ${currentNoteId} in feed but no media extracted`
+        );
+        console.log(`🎥 Note type: ${noteItem.note_card.type}`);
+        console.log(`🎬 Has video:`, !!noteItem.note_card.video);
 
-      // Still try to get video from DOM as feed might not include video data
-      const videoUrl = getCurrentNoteVideoUrl();
-      if (videoUrl) {
-        feedMedia.push({
-          url: videoUrl,
-          type: "video",
-          filename: `video_1.mp4`,
-        });
+        // If it's a video note but we couldn't extract, log more details
+        if (noteItem.note_card.type === "video" && noteItem.note_card.video) {
+          console.log("🔍 Video note detected, investigating stream data...");
+          console.log("Video object:", noteItem.note_card.video);
+        }
+      } else {
+        console.log(`❌ Note ${currentNoteId} not found in cached feed data`);
+        console.log(
+          "Available notes in feed:",
+          feedData.data.items.map((item) => item.note_card.note_id)
+        );
       }
+    }
+  }
 
+  // Strategy 2: Try to fetch feed data directly if not cached
+  console.log("🔄 Attempting to fetch fresh feed data...");
+  const freshFeedData = await attemptDirectFeedFetch();
+  if (freshFeedData) {
+    const feedMedia = parseMediaFromFeed(freshFeedData);
+    if (feedMedia.length > 0) {
+      console.log(
+        "✅ Successfully extracted media from fresh feed API",
+        feedMedia
+      );
       return feedMedia;
     }
   }
 
-  // Strategy 2: Fallback to DOM extraction
-  console.log("Falling back to DOM extraction for media");
+  // Strategy 3: Fallback to DOM extraction
+  console.log("⚠️ Falling back to DOM extraction for media");
   return extractMediaFromPageDOM();
 }
 
@@ -465,12 +578,16 @@ async function extractMediaFromPageDOM(): Promise<MediaItem[]> {
     });
   });
 
-  // Extract video from current note
+  // Extract video from current note (as fallback for DOM extraction)
   const videoUrl = getCurrentNoteVideoUrl();
   if (videoUrl && !seenUrls.has(videoUrl)) {
     seenUrls.add(videoUrl);
+    console.log("Adding video from DOM detection:", videoUrl);
+    console.log(
+      "⚠️  Using DOM fallback - this may not work as well as Feed API"
+    );
     mediaItems.push({
-      url: videoUrl,
+      url: videoUrl, // Keep URL as-is from DOM, don't modify parameters
       type: "video",
       filename: `video_1.mp4`,
     });
@@ -485,7 +602,8 @@ function extractNoteId(): string | null {
   return match ? match[1] : null;
 }
 
-// Global cache for feed data
+// Global cache for feed data (deprecated - now using Chrome storage)
+// We keep this as a fallback for synchronous access
 let cachedFeedData: FeedApiResponse | null = null;
 
 // Parse note content from feed API data
@@ -525,40 +643,210 @@ function parseMediaFromFeed(feedData: FeedApiResponse): MediaItem[] {
       (item) => item.note_card.note_id === currentNoteId
     );
 
-    if (!noteItem || !noteItem.note_card.image_list) return [];
+    if (!noteItem) return [];
 
-    return noteItem.note_card.image_list.map((img, index) => {
-      const highQualityUrl =
-        img.info_list.find((info) => info.image_scene === "WB_DFT")?.url ||
-        img.url_default;
+    const mediaItems: MediaItem[] = [];
+    const noteCard = noteItem.note_card;
 
-      let extension = "webp";
-      if (highQualityUrl.includes(".jpg") || highQualityUrl.includes(".jpeg")) {
-        extension = "jpg";
-      } else if (highQualityUrl.includes(".png")) {
-        extension = "png";
+    // Parse images
+    if (noteCard.image_list && noteCard.image_list.length > 0) {
+      noteCard.image_list.forEach((img, index) => {
+        const highQualityUrl =
+          img.info_list.find((info) => info.image_scene === "WB_DFT")?.url ||
+          img.url_default;
+
+        let extension = "webp";
+        if (
+          highQualityUrl.includes(".jpg") ||
+          highQualityUrl.includes(".jpeg")
+        ) {
+          extension = "jpg";
+        } else if (highQualityUrl.includes(".png")) {
+          extension = "png";
+        }
+
+        mediaItems.push({
+          url: highQualityUrl,
+          type: "image" as const,
+          filename: `image_${index + 1}.${extension}`,
+        });
+      });
+    }
+
+    // Parse video if it's a video note
+    if (noteCard.type === "video" && noteCard.video?.media?.stream) {
+      const stream = noteCard.video.media.stream;
+      let bestVideoUrl = "";
+      let selectedStream = null;
+
+      console.log(
+        "Processing video note, available streams:",
+        Object.keys(stream)
+      );
+      console.log("h264 streams:", stream.h264?.length || 0);
+      console.log("h265 streams:", stream.h265?.length || 0);
+
+      // Prefer h264 streams for better compatibility, choose highest quality
+      if (stream.h264 && stream.h264.length > 0) {
+        // Sort by resolution (width * height) to get the highest quality
+        const sortedH264 = stream.h264.sort(
+          (a, b) => b.width * b.height - a.width * a.height
+        );
+        selectedStream = sortedH264[0];
+        bestVideoUrl = selectedStream.master_url;
+        console.log(
+          `Selected h264 stream: ${selectedStream.width}x${selectedStream.height}`
+        );
+      } else if (stream.h265 && stream.h265.length > 0) {
+        // Fallback to h265 if no h264 available
+        const sortedH265 = stream.h265.sort(
+          (a, b) => b.width * b.height - a.width * a.height
+        );
+        selectedStream = sortedH265[0];
+        bestVideoUrl = selectedStream.master_url;
+        console.log(
+          `Selected h265 stream: ${selectedStream.width}x${selectedStream.height}`
+        );
       }
 
-      return {
-        url: highQualityUrl,
-        type: "image" as const,
-        filename: `image_${index + 1}.${extension}`,
-      };
-    });
+      if (bestVideoUrl) {
+        // IMPORTANT: Do NOT modify the video URL - keep all query parameters including sign and t
+        console.log("Raw video URL from feed API:", bestVideoUrl);
+        mediaItems.push({
+          url: bestVideoUrl, // Keep the URL exactly as provided by the API
+          type: "video" as const,
+          filename: "video_1.mp4",
+        });
+        console.log(
+          "✓ Added video to media items with original URL (preserving sign params)"
+        );
+      } else {
+        console.log("✗ No video URL found in stream data");
+      }
+    } else {
+      console.log(`Note is not a video type: ${noteCard.type}`);
+      if (noteCard.type === "video" && !noteCard.video) {
+        console.log("✗ Video note but no video data available");
+      }
+    }
+
+    return mediaItems;
   } catch (error) {
     console.error("Failed to parse media from feed:", error);
     return [];
   }
 }
 
-// Set cached feed data (called from network listener)
+// Set cached feed data (called from network listener and background script)
 function setCachedFeedData(data: FeedApiResponse): void {
+  console.log(
+    "🔄 Caching feed data with",
+    data.data?.items?.length || 0,
+    "items"
+  );
+
+  // Update memory cache for synchronous access
   cachedFeedData = data;
+
+  // Save to Chrome storage for persistence across script contexts
+  if (browser?.storage?.local) {
+    browser.storage.local
+      .set({
+        cachedFeedData: data,
+        feedDataTimestamp: Date.now(),
+      })
+      .then(() => {
+        console.log("💾 Feed data saved to Chrome storage");
+      })
+      .catch((error) => {
+        console.error("❌ Failed to save feed data to Chrome storage:", error);
+      });
+  }
+
+  // Log available notes for debugging
+  if (data.data?.items) {
+    data.data.items.forEach((item) => {
+      if (item.model_type === "note") {
+        console.log(
+          `📝 Cached note: ${item.note_card.note_id} (type: ${item.note_card.type})`
+        );
+        if (item.note_card.type === "video" && item.note_card.video) {
+          const streams = Object.keys(item.note_card.video.media?.stream || {});
+          console.log(`🎥 Video streams available:`, streams);
+
+          // Log first video URL for verification
+          const h264Streams = item.note_card.video.media?.stream?.h264;
+          if (h264Streams && h264Streams.length > 0) {
+            console.log(`🔗 Sample video URL:`, h264Streams[0].master_url);
+          }
+        }
+      }
+    });
+  }
 }
 
-// Get cached feed data
-function getCachedFeedData(): FeedApiResponse | null {
+// Get cached feed data (synchronous - uses memory cache only)
+export function getCachedFeedData(): FeedApiResponse | null {
+  if (cachedFeedData) {
+    console.log(
+      "✓ Using cached feed data from memory with",
+      cachedFeedData.data?.items?.length || 0,
+      "items"
+    );
+  } else {
+    console.log(
+      "✗ No cached feed data in memory - trying to load from Chrome storage..."
+    );
+
+    // Try to load from Chrome storage asynchronously
+    loadCachedFeedDataFromStorage();
+  }
   return cachedFeedData;
+}
+
+// Get cached feed data asynchronously from Chrome storage
+export async function getCachedFeedDataAsync(): Promise<FeedApiResponse | null> {
+  try {
+    if (browser?.storage?.local) {
+      const result = await browser.storage.local.get([
+        "cachedFeedData",
+        "feedDataTimestamp",
+      ]);
+
+      if (result.cachedFeedData) {
+        const age = Date.now() - (result.feedDataTimestamp || 0);
+        console.log(
+          "✓ Using cached feed data from Chrome storage with",
+          result.cachedFeedData.data?.items?.length || 0,
+          "items (age:",
+          age,
+          "ms)"
+        );
+
+        // Update memory cache
+        cachedFeedData = result.cachedFeedData;
+        return result.cachedFeedData;
+      }
+    }
+
+    console.log("✗ No cached feed data available in Chrome storage");
+    return null;
+  } catch (error) {
+    console.error("❌ Error loading feed data from Chrome storage:", error);
+    return null;
+  }
+}
+
+// Load cached feed data from Chrome storage (fire-and-forget)
+async function loadCachedFeedDataFromStorage(): Promise<void> {
+  try {
+    const data = await getCachedFeedDataAsync();
+    if (data) {
+      cachedFeedData = data;
+    }
+  } catch (error) {
+    console.error("❌ Error loading cached feed data:", error);
+  }
 }
 
 // API response interface for comments
@@ -728,6 +1016,35 @@ async function extractExtendedNoteContent(): Promise<ExtendedNoteContent | null>
     };
   } catch (error) {
     console.error("Failed to extract extended note content:", error);
+    return null;
+  }
+}
+
+// Attempt to fetch feed data directly (useful when cached data is not available)
+async function attemptDirectFeedFetch(): Promise<FeedApiResponse | null> {
+  try {
+    const currentNoteId = extractNoteId();
+    if (!currentNoteId) {
+      console.log("❌ No note ID found, cannot fetch feed data");
+      return null;
+    }
+
+    console.log(`🔍 Attempting to fetch feed data for note: ${currentNoteId}`);
+
+    // Try to construct a feed API URL - this is experimental
+    // The actual feed API might require specific parameters
+    const _feedUrl = "/api/sns/web/v1/feed";
+
+    console.log(
+      "⚠️ Direct feed fetch not implemented - would require reverse engineering the exact API parameters"
+    );
+    console.log(
+      "📝 Recommendation: Refresh the page to trigger natural feed API requests"
+    );
+
+    return null;
+  } catch (error) {
+    console.error("❌ Failed to fetch feed data directly:", error);
     return null;
   }
 }

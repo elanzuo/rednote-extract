@@ -1,10 +1,20 @@
-import { Check, Copy, Image, MessageCircle, Video } from "lucide-react";
+import {
+  Bug,
+  Check,
+  Copy,
+  Image,
+  MessageCircle,
+  RefreshCw,
+  Trash2,
+  Video,
+} from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { browser } from "wxt/browser";
 import {
   type DownloadProgress,
   type ExtendedNoteContent,
+  getCachedFeedDataAsync,
   MediaDownloader,
   type MediaItem,
   type NoteContent,
@@ -12,6 +22,15 @@ import {
 
 interface NotePagePopupProps {
   noteId: string;
+}
+
+interface DebugInfo {
+  backgroundConnected: boolean;
+  cachedDataAvailable: boolean;
+  cachedDataAge?: number;
+  cachedDataItems?: number;
+  lastError?: string;
+  contentScriptActive: boolean;
 }
 
 export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
@@ -26,6 +45,102 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
     useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<DebugInfo>({
+    backgroundConnected: false,
+    cachedDataAvailable: false,
+    contentScriptActive: false,
+  });
+
+  // Debug functions
+  const updateDebugInfo = useCallback(async () => {
+    try {
+      // Test background script connection
+      let _backgroundConnected = false;
+      try {
+        const backgroundResponse = await browser.runtime.sendMessage({
+          action: "getFeedData",
+        });
+        _backgroundConnected = true;
+
+        if (backgroundResponse?.success) {
+          setDebugInfo((prev) => ({
+            ...prev,
+            backgroundConnected: true,
+            cachedDataAvailable: true,
+            cachedDataAge: backgroundResponse.timestamp
+              ? Date.now() - backgroundResponse.timestamp
+              : undefined,
+            cachedDataItems: backgroundResponse.data?.data?.items?.length || 0,
+          }));
+        } else {
+          setDebugInfo((prev) => ({
+            ...prev,
+            backgroundConnected: true,
+            cachedDataAvailable: false,
+          }));
+        }
+      } catch (error) {
+        setDebugInfo((prev) => ({
+          ...prev,
+          backgroundConnected: false,
+          lastError: error instanceof Error ? error.message : "Unknown error",
+        }));
+      }
+
+      // Test content script connection
+      try {
+        const [tab] = await browser.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (tab.id) {
+          const contentResponse = await browser.tabs.sendMessage(tab.id, {
+            action: "getPageInfo",
+          });
+          setDebugInfo((prev) => ({
+            ...prev,
+            contentScriptActive: !!contentResponse,
+          }));
+        }
+      } catch (_error) {
+        setDebugInfo((prev) => ({
+          ...prev,
+          contentScriptActive: false,
+        }));
+      }
+
+      // Test cached data from Chrome storage
+      try {
+        const cachedData = await getCachedFeedDataAsync();
+        if (cachedData) {
+          setDebugInfo((prev) => ({
+            ...prev,
+            cachedDataAvailable: true,
+            cachedDataItems: cachedData.data?.items?.length || 0,
+          }));
+        }
+      } catch (error) {
+        console.error("Debug: Error checking cached data:", error);
+      }
+    } catch (error) {
+      console.error("Debug: Error updating debug info:", error);
+    }
+  }, []);
+
+  const clearCache = useCallback(async () => {
+    try {
+      await browser.runtime.sendMessage({ action: "clearFeedCache" });
+      await updateDebugInfo();
+      setCopySuccess("cache-cleared");
+      setTimeout(() => setCopySuccess(null), 2000);
+    } catch (error) {
+      setError(
+        "Failed to clear cache: " +
+          (error instanceof Error ? error.message : "Unknown error")
+      );
+    }
+  }, [updateDebugInfo]);
 
   const extractData = useCallback(async () => {
     try {
@@ -64,6 +179,11 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
     }
   }, []);
 
+  const refreshData = useCallback(async () => {
+    await updateDebugInfo();
+    await extractData();
+  }, [updateDebugInfo, extractData]);
+
   const extractExtendedData = useCallback(async () => {
     try {
       setLoadingExtended(true);
@@ -94,7 +214,8 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
 
   useEffect(() => {
     extractData();
-  }, [extractData]);
+    updateDebugInfo();
+  }, [extractData, updateDebugInfo]);
 
   const downloadSingle = async (media: MediaItem) => {
     const downloader = new MediaDownloader();
@@ -239,8 +360,122 @@ export const NotePagePopup: React.FC<NotePagePopupProps> = ({ noteId }) => {
           {noteContent?.content && (
             <span>字数: {noteContent.content.length}</span>
           )}
+          <button
+            type="button"
+            onClick={() => setShowDebug(!showDebug)}
+            className="debug-toggle-btn"
+            data-tooltip="显示调试信息"
+            style={{ marginLeft: "8px" }}
+          >
+            <Bug size={16} />
+          </button>
         </div>
       </div>
+
+      {showDebug && (
+        <div
+          className="debug-panel"
+          style={{
+            background: "#f5f5f5",
+            border: "1px solid #ddd",
+            borderRadius: "4px",
+            padding: "12px",
+            margin: "8px 0",
+            fontSize: "12px",
+          }}
+        >
+          <div
+            className="debug-header"
+            style={{ marginBottom: "8px", fontWeight: "bold" }}
+          >
+            🔍 调试信息
+          </div>
+          <div className="debug-info">
+            <div className="debug-item" style={{ marginBottom: "4px" }}>
+              <span style={{ fontWeight: "bold" }}>Background Script:</span>
+              <span
+                style={{
+                  color: debugInfo.backgroundConnected ? "#4caf50" : "#f44336",
+                  marginLeft: "8px",
+                }}
+              >
+                {debugInfo.backgroundConnected ? "✅ 已连接" : "❌ 未连接"}
+              </span>
+            </div>
+            <div className="debug-item" style={{ marginBottom: "4px" }}>
+              <span style={{ fontWeight: "bold" }}>Content Script:</span>
+              <span
+                style={{
+                  color: debugInfo.contentScriptActive ? "#4caf50" : "#f44336",
+                  marginLeft: "8px",
+                }}
+              >
+                {debugInfo.contentScriptActive ? "✅ 活跃" : "❌ 未响应"}
+              </span>
+            </div>
+            <div className="debug-item" style={{ marginBottom: "4px" }}>
+              <span style={{ fontWeight: "bold" }}>缓存数据:</span>
+              <span
+                style={{
+                  color: debugInfo.cachedDataAvailable ? "#4caf50" : "#f44336",
+                  marginLeft: "8px",
+                }}
+              >
+                {debugInfo.cachedDataAvailable
+                  ? `✅ 可用 (${debugInfo.cachedDataItems} 项)`
+                  : "❌ 不可用"}
+              </span>
+            </div>
+            {debugInfo.cachedDataAge && (
+              <div className="debug-item" style={{ marginBottom: "4px" }}>
+                <span style={{ fontWeight: "bold" }}>数据年龄:</span>
+                <span style={{ marginLeft: "8px" }}>
+                  {Math.round(debugInfo.cachedDataAge / 1000)} 秒
+                </span>
+              </div>
+            )}
+            {debugInfo.lastError && (
+              <div className="debug-item" style={{ marginBottom: "4px" }}>
+                <span style={{ fontWeight: "bold" }}>最近错误:</span>
+                <span style={{ color: "#f44336", marginLeft: "8px" }}>
+                  {debugInfo.lastError}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="debug-actions" style={{ marginTop: "8px" }}>
+            <button
+              type="button"
+              onClick={refreshData}
+              className="debug-action-btn"
+              style={{
+                marginRight: "8px",
+                padding: "4px 8px",
+                fontSize: "11px",
+              }}
+            >
+              <RefreshCw size={12} style={{ marginRight: "4px" }} />
+              刷新
+            </button>
+            <button
+              type="button"
+              onClick={clearCache}
+              className="debug-action-btn"
+              style={{ padding: "4px 8px", fontSize: "11px" }}
+            >
+              {copySuccess === "cache-cleared" ? (
+                <Check
+                  size={12}
+                  style={{ marginRight: "4px", color: "#4caf50" }}
+                />
+              ) : (
+                <Trash2 size={12} style={{ marginRight: "4px" }} />
+              )}
+              {copySuccess === "cache-cleared" ? "已清除" : "清除缓存"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {noteContent && (
         <div className="note-info">
