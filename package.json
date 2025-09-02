@@ -9,12 +9,14 @@
     "build": "wxt build",
     "zip": "wxt zip",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "lint:fix": "biome lint . --write",
     "format": "biome format .",
     "format:fix": "biome format . --write",
     "check": "biome check .",
     "check:fix": "biome check . --write",
+    "check:all": "biome check . && tsc --noEmit",
     "postinstall": "simple-git-hooks"
   },
   "keywords": [],
@@ -38,7 +40,7 @@
     "react-dom": "^19.1.1"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm run check",
+    "pre-commit": "pnpm run check:all",
     "commit-msg": "npx commitlint --edit $1"
   }
 }

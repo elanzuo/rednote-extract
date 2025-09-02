@@ -2,6 +2,7 @@ export enum PageType {
   NOTE_DETAIL = "note_detail",
   USER_PROFILE = "user_profile",
   OTHER = "other",
+  UNSUPPORTED = "unsupported",
 }
 
 export interface PageInfo {

@@ -1,6 +1,7 @@
 import { Check, Copy, Image, MessageCircle, Video } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { browser } from "wxt/browser";
 import {
   type DownloadProgress,
   type ExtendedNoteContent,

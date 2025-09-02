@@ -2,6 +2,7 @@ import { AlertCircle, FileText, User } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
+import { browser } from "wxt/browser";
 import { NotePagePopup } from "@/components/NotePagePopup";
 import { ProfilePagePopup } from "@/components/ProfilePagePopup";
 import { type PageInfo, PageType } from "@/utils/pageDetector";
@@ -13,6 +14,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const detectCurrentPage = useCallback(async () => {
+    let currentTab: { id?: number; url?: string } | null = null;
     try {
       setLoading(true);
       setError(null);
@@ -21,11 +23,12 @@ const App: React.FC = () => {
         active: true,
         currentWindow: true,
       });
+      currentTab = tab;
       if (!tab.id) throw new Error("No active tab found");
 
       // Check if we're on a Xiaohongshu domain
       if (!tab.url || !tab.url.includes("xiaohongshu.com")) {
-        setPageInfo({ type: PageType.UNSUPPORTED });
+        setPageInfo({ type: PageType.UNSUPPORTED, url: tab.url || "" });
         return;
       }
 
@@ -39,7 +42,7 @@ const App: React.FC = () => {
         err instanceof Error &&
         err.message.includes("Could not establish connection")
       ) {
-        setPageInfo({ type: PageType.UNSUPPORTED });
+        setPageInfo({ type: PageType.UNSUPPORTED, url: currentTab?.url || "" });
       } else {
         setError(
           err instanceof Error ? err.message : "Failed to detect page type"

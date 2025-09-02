@@ -18,14 +18,17 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
-    }
+    },
+    "types": ["wxt/vite-builder-env"]
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    ".wxt/wxt.d.ts"
   ],
   "exclude": [
     "node_modules",
-    ".wxt"
+    ".wxt/**/*",
+    "!.wxt/wxt.d.ts"
   ]
 }
